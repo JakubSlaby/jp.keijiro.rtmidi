@@ -1,15 +1,15 @@
-PLATFORM = iOS
+PLATFORM = iOS-simulator
 ARCH = arm64
 TARGET_TYPE = a
 MIDI_API = __MACOSX_CORE__
 
-SDK = iphoneos
-SDK_MIN_VER = 12.0
+SDK = iphonesimulator
+SDK_MIN_VER = 14.0
 
 CC := $(shell xcrun --sdk $(SDK) -f clang++)
 SYSROOT := $(shell xcrun --sdk $(SDK) --show-sdk-path)
 
-CCFLAGS += -target $(ARCH)-apple-ios$(SDK_MIN_VER) -miphoneos-version-min=$(SDK_MIN_VER)
+CCFLAGS += -target $(ARCH)-apple-ios$(SDK_MIN_VER)-simulator
 CCFLAGS += --sysroot $(SYSROOT) -isysroot $(SYSROOT)
 
 include Common.mk
