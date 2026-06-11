@@ -21,6 +21,7 @@ Desktop.ini
 /*_DoNotShip
 
 /RtMidi/build-*
+/RtMidi/dist-*
 /RtMidi/*.bundle
 /rtmidi-upstream
 
