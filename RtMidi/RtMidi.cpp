@@ -4920,6 +4920,48 @@ static jobject androidGetMidiManager(JNIEnv *env, jobject context) {
   return env->CallObjectMethod(context, getServiceMethod, env->NewStringUTF("midi"));
 }
 
+// Cached global reference to com.yellowlab.rtmidi.MidiDeviceOpenedListener.
+static jclass s_midiListenerClass = nullptr;
+
+// JNIEnv::FindClass resolves classes with the class loader associated with the
+// calling thread. Threads that were not created by the JVM (for example, the
+// GameActivity game-loop thread that Unity runs scripts on) fall back to the
+// system class loader, which only knows framework classes. That makes FindClass
+// fail for application classes such as our listener, which is why MIDI input
+// works under the classic Activity entry point but not under GameActivity.
+//
+// Resolve the class through the application context's class loader instead. That
+// works regardless of the entry point or which thread we are called from, and we
+// cache the result as a global reference for subsequent opens.
+static jclass androidGetMidiListenerClass(JNIEnv *env, jobject context) {
+  if (s_midiListenerClass != nullptr) return s_midiListenerClass;
+
+  auto contextClass = env->GetObjectClass(context);
+  auto getClassLoaderMethod = env->GetMethodID(contextClass, "getClassLoader", "()Ljava/lang/ClassLoader;");
+  auto classLoader = env->CallObjectMethod(context, getClassLoaderMethod);
+  if (classLoader == NULL) {
+    LOGE("Unable to obtain the application class loader");
+    return NULL;
+  }
+
+  auto classLoaderClass = env->FindClass("java/lang/ClassLoader");
+  auto loadClassMethod = env->GetMethodID(classLoaderClass, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;");
+  auto className = env->NewStringUTF("com.yellowlab.rtmidi.MidiDeviceOpenedListener");
+  auto listenerClass = (jclass) env->CallObjectMethod(classLoader, loadClassMethod, className);
+  env->DeleteLocalRef(className);
+
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+    LOGE("Failed to load com.yellowlab.rtmidi.MidiDeviceOpenedListener via the application class loader");
+    return NULL;
+  }
+  if (listenerClass == NULL) return NULL;
+
+  s_midiListenerClass = (jclass) env->NewGlobalRef(listenerClass);
+  env->DeleteLocalRef(listenerClass);
+  return s_midiListenerClass;
+}
+
 static void androidRefreshMidiDevices(JNIEnv *env, jobject context, bool isOutput) {
   // Remove all midi devices
   for (jobject jMidiDevice : androidMidiDevices) {
@@ -4990,7 +5032,7 @@ static void androidOpenDevice(jobject deviceInfo, void* target, bool isOutput) {
     auto handlerCtor = env->GetMethodID(handlerClass, "<init>", "(Landroid/os/Looper;)V");
     auto handler = env->NewObject(handlerClass, handlerCtor, mainLooperObj);
 
-    jclass listenerClass = env->FindClass("com/yellowlab/rtmidi/MidiDeviceOpenedListener");
+    jclass listenerClass = androidGetMidiListenerClass(env, context);
     if (!listenerClass) {
       LOGE("Midi listener class not found com.yellowlab.rtmidi.MidiDeviceOpenedListener. Did you forget to add it to your APK?");
       return;
