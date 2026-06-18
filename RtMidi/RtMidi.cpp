@@ -5087,6 +5087,12 @@ void MidiInAndroid :: connect() {
 }
 
 MidiInAndroid :: ~MidiInAndroid() {
+  // Stop and join the polling thread (and release the device) before this
+  // object is torn down. Without this, unplugging the device frees the
+  // MidiInAndroid instance while pollMidi() is still running on it, causing a
+  // use-after-free crash inside pollMidi.
+  closePort();
+
   auto env = androidGetThreadEnv();
 
   // Remove all midi devices
